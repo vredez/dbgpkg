@@ -1,0 +1,44 @@
+#!/bin/sh
+
+# (c) 2020 Philipp Lindner <phlpp.lndnr gmail com>
+# Downloads the PKGBUILD files from the Arch Linux package mirror, and builds a debuggable version of the package.
+
+SRC_DIR=~/.source
+PKG_NAME=$1
+ZIP_FILE=${PKG_NAME}.zip
+
+[ $# -eq 1 ] || { echo "Usage: dbgpkg PACKAGE"; exit 1; }
+REPO=$(pacman -Si $PKG_NAME | awk '$1 == "Repository" { print $3 }')
+[ -z $REPO ] && exit 1
+
+PKG_REPO=svntogit-packages
+if [ $REPO == community ]
+then
+    PKG_REPO=svntogit-community
+fi
+
+PKGFILE_ARCHIVE=https://github.com/archlinux/${PKG_REPO}/archive/packages/${ZIP_FILE}
+
+cd "${SRC_DIR}"
+
+if [ -d $PKG_NAME ]
+then
+    read -p "Do you want to override the existing files in '${SRC_DIR}/${PKG_NAME}'? [y/N]: " yn
+    case $yn in
+        [Yy]*) rm -rf $PKG_NAME;;
+        *) exit;;
+    esac
+fi
+
+mkdir $PKG_NAME
+cd $PKG_NAME
+
+echo "Downloading ${PKGFILE_ARCHIVE}"
+
+curl -L $PKGFILE_ARCHIVE -o $ZIP_FILE && unzip -j $ZIP_FILE */*x86_64/* && rm $ZIP_FILE && cat >> PKGBUILD <<EOF
+options=(debug !strip)
+EOF
+
+[ $? -eq 0 ] || exit $?
+
+makepkg -ris
